@@ -1054,19 +1054,19 @@ export function joinReferenceArray<T>(dataStart: usize, length: i32, separator: 
   if (!lastIndex) {
     value = load<T>(dataStart);
     // @ts-ignore: type
-    return value != null ? value.toString() : "";
+    return value ? value.toString() : "";
   }
   let result = "";
   let sepLen = separator.length;
   for (let i = 0; i < lastIndex; ++i) {
     value = load<T>(dataStart + (<usize>i << alignof<T>()));
     // @ts-ignore: type
-    if (value != null) result += value.toString();
+    if (value) result += value.toString();
     if (sepLen) result += separator;
   }
   value = load<T>(dataStart + (<usize>lastIndex << alignof<T>()));
   // @ts-ignore: type
-  if (value != null) result += value.toString();
+  if (value) result += value.toString();
   return result;
 }
 
