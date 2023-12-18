@@ -1308,7 +1308,7 @@ export class Program extends DiagnosticEmitter {
     for (let i = 0, k = queuedExtends.length; i < k; ++i) {
       let thisPrototype = queuedExtends[i];
       let extendsNode = assert(thisPrototype.extendsNode); // must be present if in queuedExtends
-      let baseElement = resolver.resolveTypeName(extendsNode.name, thisPrototype.parent);
+      let baseElement = resolver.resolveTypeName(extendsNode.name, null, thisPrototype.parent);
       if (!baseElement) continue;
       if (thisPrototype.kind == ElementKind.ClassPrototype) {
         if (baseElement.kind == ElementKind.ClassPrototype) {
@@ -1405,7 +1405,7 @@ export class Program extends DiagnosticEmitter {
       let implementsNodes = assert(thisPrototype.implementsNodes); // must be present if in queuedImplements
       for (let j = 0, l = implementsNodes.length; j < l; ++j) {
         let implementsNode = implementsNodes[j];
-        let interfaceElement = resolver.resolveTypeName(implementsNode.name, thisPrototype.parent);
+        let interfaceElement = resolver.resolveTypeName(implementsNode.name, null, thisPrototype.parent);
         if (!interfaceElement) continue;
         if (interfaceElement.kind == ElementKind.InterfacePrototype) {
           let interfacePrototype = <InterfacePrototype>interfaceElement;
@@ -2671,6 +2671,10 @@ export class Program extends DiagnosticEmitter {
     /** Parent interface. */
     parent: InterfacePrototype
   ): void {
+    let initializer = declaration.initializer;
+    if (initializer) {
+      this.error(DiagnosticCode.An_interface_property_cannot_have_an_initializer, initializer.range);
+    }
     let typeNode = declaration.type;
     if (!typeNode) typeNode = Node.createOmittedType(declaration.name.range.atEnd);
     this.initializeProperty(
@@ -3084,6 +3088,13 @@ export abstract class Element {
     return (this.flags & vis) == (other.flags & vis);
   }
 
+  visibilityNoLessThan(other: Element): bool {
+    if (this.isPublic) return true; // public is a most frequent case
+    if (this.is(CommonFlags.Private)) return other.is(CommonFlags.Private);
+    if (this.is(CommonFlags.Protected)) return other.isAny(CommonFlags.Private | CommonFlags.Protected);
+    return assert(false);
+  }
+
   /** Tests if this element is bound to a class. */
   get isBound(): bool {
     let parent = this.parent;
@@ -3372,7 +3383,7 @@ export class TypeDefinition extends TypedElement {
   constructor(
     /** Simple name. */
     name: string,
-    /** Parent element, usually a file or namespace. */
+    /** Parent element. */
     parent: Element,
     /** Declaration reference. */
     declaration: TypeDeclaration,
@@ -4169,6 +4180,17 @@ export class Property extends VariableLikeElement {
   /** Tests if this property represents a field. */
   get isField(): bool {
     return this.prototype.isField;
+  }
+
+  checkVisibility(diag: DiagnosticEmitter): void {
+    let propertyGetter = this.getterInstance;
+    let propertySetter = this.setterInstance;
+    if (propertyGetter && propertySetter && !propertyGetter.visibilityNoLessThan(propertySetter)) {
+      diag.errorRelated(
+        DiagnosticCode.Get_accessor_0_must_be_at_least_as_accessible_as_the_setter,
+        propertyGetter.identifierNode.range, propertySetter.identifierNode.range, propertyGetter.identifierNode.text
+      );
+    }
   }
 }
 
